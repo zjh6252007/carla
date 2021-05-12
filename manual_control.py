@@ -154,6 +154,9 @@ def get_actor_display_name(actor, truncate=250):
     name = ' '.join(actor.type_id.replace('_', '.').title().split('.')[1:])
     return (name[:truncate - 1] + u'\u2026') if len(name) > truncate else name
 
+def get_actor_velocity(actor):
+    return actor.get_velocity()
+
 
 # ==============================================================================
 # -- World ---------------------------------------------------------------------
@@ -638,14 +641,16 @@ class HUD(object):
             '',
             'Number of vehicles: % 8d' % len(vehicles)]
         if len(vehicles) > 1:
-            self._info_text += ['Nearby vehicles:']
             distance = lambda l: math.sqrt((l.x - t.location.x)**2 + (l.y - t.location.y)**2 + (l.z - t.location.z)**2)
             vehicles = [(distance(x.get_location()), x) for x in vehicles if x.id != world.player.id]
             for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
                 if d > 200.0:
                     break
                 vehicle_type = get_actor_display_name(vehicle, truncate=22)
-                self._info_text.append('% 4dm %s' % (d, vehicle_type))
+                vehicle_velocity = get_actor_velocity(vehicle)
+                vehicle_speed = 3.6 * math.sqrt(vehicle_velocity.x**2 + vehicle_velocity.y**2 + vehicle_velocity.z**2)
+                self._info_text.append('distance of next car :% 4dm ' % (d))
+                self._info_text.append('speed of Next Car:%d km/h' % (vehicle_speed))
 
     def toggle_info(self):
         self._show_info = not self._show_info
