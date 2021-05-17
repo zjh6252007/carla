@@ -82,6 +82,7 @@ import carla
 from carla import ColorConverter as cc
 
 import argparse
+import time
 import collections
 import datetime
 import logging
@@ -142,6 +143,9 @@ except ImportError:
 # -- Global functions ----------------------------------------------------------
 # ==============================================================================
 
+localtime = time.strftime("%Y-%m-%d-%H-%M-%S")
+dataname = os.path.join(localtime+'_data')
+my_data = open(dataname,"w")
 
 def find_weather_presets():
     rgx = re.compile('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)')
@@ -598,6 +602,7 @@ class HUD(object):
         max_col = max(1.0, max(collision))
         collision = [x / max_col for x in collision]
         vehicles = world.world.get_actors().filter('vehicle.*')
+        car_speed = 3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)
         self._info_text = [
             'Server:  % 16.0f FPS' % self.server_fps,
             'Client:  % 16.0f FPS' % clock.get_fps(),
@@ -614,10 +619,10 @@ class HUD(object):
             'GNSS:% 24s' % ('(% 2.6f, % 3.6f)' % (world.gnss_sensor.lat, world.gnss_sensor.lon)),
             'Height:  % 18.0f m' % t.location.z,
             '']
-        if (3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2) > 40):
+        if (car_speed > 40):
             self.speedmention.toggle()
             
-        if (3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2) < 40):
+        if (car_speed < 40):
             self.speedmention.untoggle()
 
             
@@ -644,11 +649,13 @@ class HUD(object):
             distance = lambda l: math.sqrt((l.x - t.location.x)**2 + (l.y - t.location.y)**2 + (l.z - t.location.z)**2)
             vehicles = [(distance(x.get_location()), x) for x in vehicles if x.id != world.player.id]
             for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
-                if d > 200.0:
+                if d > 500.0:
                     break
                 vehicle_type = get_actor_display_name(vehicle, truncate=22)
                 vehicle_velocity = get_actor_velocity(vehicle)
+                v_location = get_actor_location(vehicle)
                 vehicle_speed = 3.6 * math.sqrt(vehicle_velocity.x**2 + vehicle_velocity.y**2 + vehicle_velocity.z**2)
+                my_data.write('\nNext car speed = %dkm/h  This car speed = %dkm/h  Distance = %d/km   Current Car location: %5.1f,%5.1f   Next car location: %5.1f,%5.1f   '%(vehicle_speed,car_speed,d,t.location.x,t.location.y,v_location.location.x,v_location.location.y)+ datetime.datetime.now().strftime('%H:%M:%S.%f') )
                 self._info_text.append('distance of next car :% 4dm ' % (d))
                 self._info_text.append('speed of Next Car:%d km/h' % (vehicle_speed))
 
