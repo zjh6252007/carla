@@ -82,9 +82,9 @@ import carla
 from carla import ColorConverter as cc
 
 import argparse
-import time
 import collections
 import datetime
+import time
 import logging
 import math
 import random
@@ -160,6 +160,9 @@ def get_actor_display_name(actor, truncate=250):
 
 def get_actor_velocity(actor):
     return actor.get_velocity()
+
+def get_actor_location(actor):
+    return actor.get_transform()
 
 
 # ==============================================================================
@@ -659,6 +662,7 @@ class HUD(object):
                 self._info_text.append('distance of next car :% 4dm ' % (d))
                 self._info_text.append('speed of Next Car:%d km/h' % (vehicle_speed))
 
+
     def toggle_info(self):
         self._show_info = not self._show_info
 
@@ -707,6 +711,7 @@ class HUD(object):
         self.help.render(display)
         self.speedmention.render(display)
 
+
         
 # ==============================================================================
 # -- SpeedMention ------------------------------------------------------------------
@@ -736,6 +741,7 @@ class SpeedMention(object):
         if self._render:
             display.blit(self.surface, self.pos)
 
+            
 
 # ==============================================================================
 # -- FadingText ----------------------------------------------------------------
@@ -1149,7 +1155,7 @@ def game_loop(args):
     pygame.init()
     pygame.font.init()
     world = None
-
+    
     try:
         client = carla.Client(args.host, args.port)
         client.set_timeout(2.0)
