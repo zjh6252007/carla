@@ -481,6 +481,7 @@ class HUD(object):
             for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
                 if d > 500.0:
                     break
+                vehicle_number = vehicles
                 vehicle_type = get_actor_display_name(vehicle, truncate=22)
                 vehicle_velocity = get_actor_velocity(vehicle)
                 v_location = get_actor_location(vehicle)
