@@ -111,7 +111,6 @@ except ImportError:
 localtime = time.strftime("%Y-%m-%d-%H-%M-%S")
 dataname = os.path.join(localtime+'_data')
 my_data = open(dataname,"w")
-
 def find_weather_presets():
     rgx = re.compile('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)')
     name = lambda x: ' '.join(m.group(0) for m in rgx.finditer(x))
@@ -433,6 +432,7 @@ class HUD(object):
         collision = [x / max_col for x in collision]
         car_speed = 3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)
         vehicles = world.world.get_actors().filter('vehicle.*')
+        my_data.write('\nPlayer(%3d):%3dkm/h  x:'%world.player.id,car_speed)
         self._info_text = [
             'Server:  % 16.0f FPS' % self.server_fps,
             'Client:  % 16.0f FPS' % clock.get_fps(),
@@ -481,13 +481,15 @@ class HUD(object):
             for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
                 if d > 500.0:
                     break
-                vehicle_number = vehicles
+                
                 vehicle_type = get_actor_display_name(vehicle, truncate=22)
                 vehicle_velocity = get_actor_velocity(vehicle)
                 v_location = get_actor_location(vehicle)
+                vehicle_id = vehicle.id
                 vehicle_speed = 3.6 * math.sqrt(vehicle_velocity.x**2 + vehicle_velocity.y**2 + vehicle_velocity.z**2)
-                my_data.write('\nNext car speed = %dkm/h  This car speed = %dkm/h  Distance = %d/km   Current Car location: %5.1f,%5.1f\
-Next car location: %5.1f,%5.1f '%(vehicle_speed,car_speed,d,t.location.x,t.location.y,v_location.location.x,v_location.location.y)+ datetime.datetime.now().strftime('%H:%M:%S.%f') )
+               ## my_data.write('\nPlayer(%3d):%3dkm/h  x:%5.1f,y:%5.1f\n(%3d): %3d/km %2dkm/h  x:%5.1f,y:%5.1f'%(world.player.id,car_speed,t.location.x,t.location.y,vehicle_id,d,vehicle_speed,v_location.location.x,v_location.location.y)+ datetime.datetime.now().strftime('%H:%M:%S') )
+               ## my_data.write('\nNext car speed = %dkm/h  This car speed = %dkm/h  Distance = %d/km   Current Car location: %5.1f,%5.1f\
+##Next car location: %5.1f,%5.1f '%(vehicle_speed,car_speed,d,t.location.x,t.location.y,v_location.location.x,v_location.location.y)+ datetime.datetime.now().strftime('%H:%M:%S.%f') )
                 self._info_text.append('distance of next car :% 4dm ' % (d))
                 self._info_text.append('speed of Next Car:%d km/h' % (vehicle_speed))
 
@@ -923,3 +925,4 @@ def main():
 if __name__ == '__main__':
 
     main()
+
