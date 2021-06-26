@@ -85,11 +85,14 @@ import argparse
 import collections
 import datetime
 import time
+from collections import defaultdict
 import logging
 import math
 import random
 import re
 import weakref
+import json
+import atexit
 
 try:
     import pygame
@@ -144,9 +147,9 @@ except ImportError:
 # ==============================================================================
 
 localtime = time.strftime("%Y-%m-%d-%H-%M-%S")
-dataname = os.path.join(localtime+'_data')
-my_data = open(dataname,"w")
-
+dataname = os.path.join(localtime+'_data.json')
+with open(dataname,'a') as file:
+    file.write("[")
 def find_weather_presets():
     rgx = re.compile('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)')
     name = lambda x: ' '.join(m.group(0) for m in rgx.finditer(x))
@@ -164,7 +167,11 @@ def get_actor_velocity(actor):
 def get_actor_location(actor):
     return actor.get_transform()
 
-
+@atexit.register
+def clean():
+    with open(dataname,'a') as file:
+        file.write('{"veh_ID":[],"veh_speed":[],"x":[],"y":[]}]')
+        file.close()
 # ==============================================================================
 # -- World ---------------------------------------------------------------------
 # ==============================================================================
@@ -581,7 +588,36 @@ class HUD(object):
         self._show_info = True
         self._info_text = []
         self._server_clock = pygame.time.Clock()
-
+    def print_self_info(self,world):
+        t = world.player.get_transform()
+        v = world.player.get_velocity()
+        vehicles = world.world.get_actors().filter('vehicle.*')
+        car_speed = 3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)
+        info_dic = defaultdict(list)
+        info_dic["veh_ID"].append(world.player.id)
+        info_dic["veh_speed"].append(car_speed)
+        info_dic["x"].append(t.location.x)
+        info_dic["y"].append(t.location.y)
+        info_dic["time"].append(datetime.datetime.now().strftime('%H:%M:%S.%f'))
+        with open(dataname,'a') as file:
+            if len(vehicles) > 1:
+                
+                distance = lambda l: math.sqrt((l.x - t.location.x)**2 + (l.y - t.location.y)**2 + (l.z - t.location.z)**2)
+                vehicles = [(distance(x.get_location()), x) for x in vehicles if x.id != world.player.id]
+                for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
+                    if d > 500.0:
+                        break
+                    vehicle_velocity = get_actor_velocity(vehicle)
+                    v_location = get_actor_location(vehicle)
+                    vehicle_speed = 3.6 * math.sqrt(vehicle_velocity.x**2 + vehicle_velocity.y**2 + vehicle_velocity.z**2)
+                    vehicle_id = vehicle.id
+                    info_dic["veh_ID"].append(vehicle_id)
+                    info_dic["veh_speed"].append(vehicle_speed)
+                    info_dic["x"].append(v_location.location.x)
+                    info_dic["y"].append(v_location.location.y)
+            json.dump(info_dic,file)
+            file.write(",")
+            file.close()
     def on_world_tick(self, timestamp):
         self._server_clock.tick()
         self.server_fps = self._server_clock.get_fps()
@@ -658,11 +694,8 @@ class HUD(object):
                 vehicle_velocity = get_actor_velocity(vehicle)
                 v_location = get_actor_location(vehicle)
                 vehicle_speed = 3.6 * math.sqrt(vehicle_velocity.x**2 + vehicle_velocity.y**2 + vehicle_velocity.z**2)
-                my_data.write('\nNext car speed = %dkm/h  This car speed = %dkm/h  Distance = %d/km   Current Car location: %5.1f,%5.1f   Next car location: %5.1f,%5.1f   '%(vehicle_speed,car_speed,d,t.location.x,t.location.y,v_location.location.x,v_location.location.y)+ datetime.datetime.now().strftime('%H:%M:%S.%f') )
-                self._info_text.append('distance of next car :% 4dm ' % (d))
-                self._info_text.append('speed of Next Car:%d km/h' % (vehicle_speed))
-
-
+                vehicle_id = vehicle.id
+        
     def toggle_info(self):
         self._show_info = not self._show_info
 
@@ -1057,6 +1090,10 @@ class CameraManager(object):
             if item[0].startswith('sensor.camera'):
                 bp.set_attribute('image_size_x', str(hud.dim[0]))
                 bp.set_attribute('image_size_y', str(hud.dim[1]))
+                if bp.has_attribute('shutter_speed'):
+                    bp.set_attribute('shutter_speed',str(5.0))
+                if bp.has_attribute('lens_flare_intensity'):
+                    bp.set_attribute('lens_flare_intensity',str(0.0))
                 if bp.has_attribute('gamma'):
                     bp.set_attribute('gamma', str(gamma_correction))
                 for attr_name, attr_value in item[3].items():
@@ -1150,7 +1187,6 @@ class CameraManager(object):
 # -- game_loop() ---------------------------------------------------------------
 # ==============================================================================
 
-
 def game_loop(args):
     pygame.init()
     pygame.font.init()
@@ -1177,8 +1213,9 @@ def game_loop(args):
                 return
             world.tick(clock)
             world.render(display)
+            hud.print_self_info(world)
             pygame.display.flip()
-
+  
     finally:
 
         if (world and world.recording_enabled):
