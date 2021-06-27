@@ -1,32 +1,34 @@
 import socket
-import socketserver
-import time
-import threading
-from socketserver import BaseRequestHandler,ThreadingTCPServer
+import os
+from _thread import *
+
+ServerSocket = socket.socket()
+host = '127.0.0.1'
+port = 1233
+ThreadCount = 0
+try:
+    ServerSocket.bind((host, port))
+except socket.error as e:
+    print(str(e))
+
+print('Waitiing for a Connection..')
+ServerSocket.listen(5)
 
 
-second = 2
-class MyServer(socketserver.BaseRequestHandler):
- 
-    def handle(self):
-         while True:
-             client = self.request
-             print('客户已链接')
-             #buf = client.recv(1024)
-             #print('接收到的',buf)
-             try:
-                 client.send("Speed up")
-                 time.sleep(second)#要发送的数据，类型为str。若要发送字典、列表可以用json.dumps转换
-             except:
-                 print('socket.error')
-                 return
+def threaded_client(connection):
+    connection.send(str.encode('Welcome to the Servern'))
+    while True:
+        data = connection.recv(2048)
+        reply = 'Server Says: ' + data.decode('utf-8')
+        if not data:
+            break
+        connection.sendall(str.encode(reply))
+    connection.close()
 
-if __name__ == '__main__':
-    HOST = '127.0.0.1'
-    PORT = 15681
-    ADDR = (HOST,PORT)
-    server = ThreadingTCPServer(ADDR,MyServer)  #参数为监听地址和已建立连接的处理类
-    print('listening')
-    server.serve_forever()  #监听，建立好TCP连接后，为该连接创建新的socket和线程，并由处理类中的handle方法处理
-    print(server)
-
+while True:
+    Client, address = ServerSocket.accept()
+    print('Connected to: ' + address[0] + ':' + str(address[1]))
+    start_new_thread(threaded_client, (Client, ))
+    ThreadCount += 1
+    print('Thread Number: ' + str(ThreadCount))
+ServerSocket.close()
