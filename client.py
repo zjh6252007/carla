@@ -8,9 +8,9 @@ import time
 
 
 data = "20"
-time = "20"
+time = "30"
 ne = ""
-
+color = 1
 def server():
     
     ip_port = ('127.0.0.1', 8888)
@@ -21,39 +21,48 @@ def server():
         global data
         global time
         global ne
+        
         data = sk.recv(1024).decode()
+        if data == 'None':
+            data = "0"
         sk.send(b"ack")
         time = sk.recv(1024).decode()
+        if time == "None":
+            time = "0"
         sk.send(b"ack2")
         ne = sk.recv(1024).decode()
+        
+        print(ne)
     sk.close()
 
 def getmessage():
     global data
-    global time
-    
+    global color
     number = int(data)
     if (number >= 0):
-        mess = data + " second early"
+        mess = "+" + data + "kph"
+        color = 1
     else:
-        mess = data + " second late"
+        mess = "-" + data + "kph"
+        color = -1
     var.set(mess)
-    root.after(2000, getmessage)
+    root.after(1000, getmessage)
     
 def gettime():
     global time
+    
     time_ = int(time)
     if (time_ >= 0):
-        mess =   "+"+ time +"kph"
+        mess =    time +" late"
     else:
-        mess ="-" + time +"kph"
+        mess = time +" early"
     var1.set(mess)
-    root.after(2000,gettime)
+    root.after(1000,gettime)
 
 def getnev():
     global ne
     var2.set(ne)
-    root.after(2000,getnev)
+    root.after(1000,getnev)
     
 root =tk.Tk()
 
@@ -62,15 +71,14 @@ root.title('mention')
 var=tk.StringVar()
 var1=tk.StringVar()
 var2=tk.StringVar()
-color = int(data)
 
-if(color >= 0):
-    w =tk.Label(root, text="Hello Python!",textvariable=var,fg='red',font=("微软雅黑",40))
-    v =tk.Label(root, text= "hello",textvariable = var1,fg ='red',font=("微软雅黑",40))
+if(color == 1):
+    w =tk.Label(root, text="Hello Python!",textvariable=var1,fg='red',font=("微软雅黑",40))
+    v =tk.Label(root, text= "hello",textvariable = var,fg ='red',font=("微软雅黑",40))
     z =tk.Label(root,text="",textvariable = var2,fg='black',font=("微软雅黑",40))
-else:
-    w =tk.Label(root, text="Hello Python!",textvariable=var,fg='green',font=("微软雅黑",40))
-    v =tk.Label(root, text= "hello",textvariable = var1,fg ='green',font=("微软雅黑",40))
+if(color == -1):
+    w =tk.Label(root, text="Hello Python!",textvariable=var1,fg='green',font=("微软雅黑",40))
+    v =tk.Label(root, text= "hello",textvariable = var,fg ='green',font=("微软雅黑",40))
     z =tk.Label(root,text="",textvariable = var2, fg='black',font=("微软雅黑",40))
 
 var.set(getmessage())
