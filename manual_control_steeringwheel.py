@@ -29,6 +29,9 @@ from __future__ import print_function
 import glob
 import os
 import sys
+import socket
+from threading import Thread
+from _thread import *
 
 try:
     sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
@@ -37,7 +40,25 @@ try:
         'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
 except IndexError:
     pass
+sys.path.append("/usr/share/sumo/tools")
+sys.path.append("/home/carla3/carla/Co-Simulation/Sumo")
+import synchronization as syn
+import traci
 
+# ==================================================================================================
+# -- find traci module -----------------------------------------------------------------------------
+# ==================================================================================================
+
+if 'SUMO_HOME' in os.environ:
+    sys.path.append(os.path.join(os.environ['SUMO_HOME'], 'tools'))
+else:
+    sys.exit("please declare environment variable 'SUMO_HOME'")
+import traci
+
+from sumo_integration.sumo_simulation import SumoSimulation
+from sumo_integration.carla_simulation import CarlaSimulation
+from sumo_integration.bridge_helper import BridgeHelper
+from sumo_integration.constants import INVALID_ACTOR_ID
 
 # ==============================================================================
 # -- imports -------------------------------------------------------------------
@@ -48,15 +69,19 @@ import carla
 
 from carla import ColorConverter as cc
 
+import socketserver
 import argparse
 import collections
 import datetime
+import time
 import logging
 import math
+from collections import defaultdict
 import random
 import re
 import weakref
-import time
+import json
+import atexit
 
 if sys.version_info >= (3, 0):
 
@@ -107,10 +132,25 @@ except ImportError:
 # ==============================================================================
 # -- Global functions ----------------------------------------------------------
 # ==============================================================================
+CV_message = {"carla0":{"advice_speed": 0, "time_difference": 0, "navigation": "none"},"carla1":{"time_difference":0,"advice_speed":0,"navigation": "none"},"carla2":{"time_difference":0,"advice_speed":0,"navigation": "none"}}
+adspeed = str(CV_message['carla0']['advice_speed'])
+td = str(CV_message['carla0']['time_difference'])
+na = CV_message['carla0']['navigation']
+
+adspeed1 = str(CV_message['carla1']['advice_speed'])
+td1 = str(CV_message['carla1']['time_difference'])
+na1 = CV_message['carla1']['navigation']
+
+adspeed2 = str(CV_message['carla2']['advice_speed'])
+td2 = str(CV_message['carla2']['time_difference'])
+na2 = CV_message['carla2']['navigation']
 
 localtime = time.strftime("%Y-%m-%d-%H-%M-%S")
-dataname = os.path.join(localtime+'_data')
-my_data = open(dataname,"w")
+dataname = os.path.join(localtime+'_data.json')
+
+with open(dataname,'a') as file:
+    file.write("[")
+
 def find_weather_presets():
     rgx = re.compile('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)')
     name = lambda x: ' '.join(m.group(0) for m in rgx.finditer(x))
@@ -122,12 +162,18 @@ def get_actor_display_name(actor, truncate=250):
     name = ' '.join(actor.type_id.replace('_', '.').title().split('.')[1:])
     return (name[:truncate - 1] + u'\u2026') if len(name) > truncate else name
 
-
 def get_actor_velocity(actor):
     return actor.get_velocity()
 
 def get_actor_location(actor):
     return actor.get_transform()
+
+@atexit.register
+def clean():
+    with open(dataname,'a') as file:
+        file.write('{"veh_ID":[],"veh_speed":[],"x":[],"y":[]}]')
+        file.close()
+
 
 # ==============================================================================
 # -- World ---------------------------------------------------------------------
@@ -400,15 +446,50 @@ class HUD(object):
         mono = pygame.font.match_font(mono)
         self._font_mono = pygame.font.Font(mono, 12 if os.name == 'nt' else 14)
         self._notifications = FadingText(font, (width, 40), (0, height - 40))
-        self.help = HelpText(pygame.font.Font(mono, 16), width, height)
-        self.speedmention = SpeedMention(pygame.font.Font(mono, 16), width, height)
+        self.help = HelpText(pygame.font.Font(mono, 24), width, height)
         self.server_fps = 0
+        self.speedmention = SpeedMention(pygame.font.Font(mono, 16), width, height)
         self.frame = 0
         self.simulation_time = 0
         self._show_info = True
         self._info_text = []
         self._server_clock = pygame.time.Clock()
 
+    def print_self_info(self,world):
+        t = world.player.get_transform()
+        v = world.player.get_velocity()
+        c = world.player.get_control()
+        vehicles = world.world.get_actors().filter('vehicle.*')
+        car_speed = 3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)
+        info_dic = defaultdict(list)
+        info_dic["veh_ID"].append(world.player.id)
+        info_dic["veh_speed"].append(car_speed)
+        info_dic["x"].append(t.location.x)
+        info_dic["y"].append(t.location.y)
+        info_dic["time"].append(datetime.datetime.now().strftime('%H:%M:%S.%f'))
+        if isinstance(c):
+            info_dic["Throttle"].append(c.throttle)
+            info_dic["steer"].append(c.steer)
+        with open(dataname,'a') as file:
+            if len(vehicles) > 1:
+                
+                distance = lambda l: math.sqrt((l.x - t.location.x)**2 + (l.y - t.location.y)**2 + (l.z - t.location.z)**2)
+                vehicles = [(distance(x.get_location()), x) for x in vehicles if x.id != world.player.id]
+                for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
+                    if d > 500.0:
+                        break
+                    vehicle_velocity = get_actor_velocity(vehicle)
+                    v_location = get_actor_location(vehicle)
+                    vehicle_speed = 3.6 * math.sqrt(vehicle_velocity.x**2 + vehicle_velocity.y**2 + vehicle_velocity.z**2)
+                    vehicle_id = vehicle.id
+                    info_dic["veh_ID"].append(vehicle_id)
+                    info_dic["veh_speed"].append(vehicle_speed)
+                    info_dic["x"].append(v_location.location.x)
+                    info_dic["y"].append(v_location.location.y)
+            json.dump(info_dic,file)
+            file.write(",")
+            file.close()
+    
     def on_world_tick(self, timestamp):
         self._server_clock.tick()
         self.server_fps = self._server_clock.get_fps()
@@ -430,15 +511,12 @@ class HUD(object):
         collision = [colhist[x + self.frame - 200] for x in range(0, 200)]
         max_col = max(1.0, max(collision))
         collision = [x / max_col for x in collision]
-        car_speed = 3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)
         vehicles = world.world.get_actors().filter('vehicle.*')
-        my_data.write('\nPlayer(%3d):%3dkm/h  x:'%world.player.id,car_speed)
         self._info_text = [
             'Server:  % 16.0f FPS' % self.server_fps,
             'Client:  % 16.0f FPS' % clock.get_fps(),
             '',
             'Vehicle: % 20s' % get_actor_display_name(world.player, truncate=20),
-
             'Simulation time: % 12s' % datetime.timedelta(seconds=int(self.simulation_time)),
             '',
             'Speed:   % 15.0f km/h' % (3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)),
@@ -447,15 +525,7 @@ class HUD(object):
             'GNSS:% 24s' % ('(% 2.6f, % 3.6f)' % (world.gnss_sensor.lat, world.gnss_sensor.lon)),
             'Height:  % 18.0f m' % t.location.z,
             '']
-
-        if (car_speed > 40):
-            self.speedmention.toggle()
-            
-        if (car_speed < 40):
-            self.speedmention.untoggle()
-        
         if isinstance(c, carla.VehicleControl):
-            my_data.write('\nsteer = %5.1f  throttle = %5.1f' % (c.steer, c.throttle))
             self._info_text += [
                 ('Throttle:', c.throttle, 0.0, 1.0),
                 ('Steer:', c.steer, -1.0, 1.0),
@@ -474,26 +544,19 @@ class HUD(object):
             collision,
             '',
             'Number of vehicles: % 8d' % len(vehicles)]
-
         if len(vehicles) > 1:
+            self._info_text += ['Nearby vehicles:']
             distance = lambda l: math.sqrt((l.x - t.location.x)**2 + (l.y - t.location.y)**2 + (l.z - t.location.z)**2)
             vehicles = [(distance(x.get_location()), x) for x in vehicles if x.id != world.player.id]
-            for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
+            for d, vehicle in sorted(vehicles):
                 if d > 500.0:
                     break
-                
                 vehicle_type = get_actor_display_name(vehicle, truncate=22)
                 vehicle_velocity = get_actor_velocity(vehicle)
                 v_location = get_actor_location(vehicle)
-                vehicle_id = vehicle.id
                 vehicle_speed = 3.6 * math.sqrt(vehicle_velocity.x**2 + vehicle_velocity.y**2 + vehicle_velocity.z**2)
-               ## my_data.write('\nPlayer(%3d):%3dkm/h  x:%5.1f,y:%5.1f\n(%3d): %3d/km %2dkm/h  x:%5.1f,y:%5.1f'%(world.player.id,car_speed,t.location.x,t.location.y,vehicle_id,d,vehicle_speed,v_location.location.x,v_location.location.y)+ datetime.datetime.now().strftime('%H:%M:%S') )
-               ## my_data.write('\nNext car speed = %dkm/h  This car speed = %dkm/h  Distance = %d/km   Current Car location: %5.1f,%5.1f\
-##Next car location: %5.1f,%5.1f '%(vehicle_speed,car_speed,d,t.location.x,t.location.y,v_location.location.x,v_location.location.y)+ datetime.datetime.now().strftime('%H:%M:%S.%f') )
-                self._info_text.append('distance of next car :% 4dm ' % (d))
-                self._info_text.append('speed of Next Car:%d km/h' % (vehicle_speed))
-
-
+                vehicle_id = vehicle.id
+            
     def toggle_info(self):
         self._show_info = not self._show_info
 
@@ -540,8 +603,6 @@ class HUD(object):
                 v_offset += 18
         self._notifications.render(display)
         self.help.render(display)
-        self.speedmention.render(display)
-
 
 # ==============================================================================
 # -- SpeedMention ------------------------------------------------------------------
@@ -572,7 +633,6 @@ class SpeedMention(object):
             display.blit(self.surface, self.pos)
 
             
-
 
 # ==============================================================================
 # -- FadingText ----------------------------------------------------------------
@@ -849,6 +909,22 @@ def game_loop(args):
         controller = DualControl(world, args.autopilot)
 
         clock = pygame.time.Clock()
+
+        args_sumo = {"sumo_cfg_file": "/home/carla3/Desktop/sumo_model/map.sumocfg",
+                     "step_length": 0.02,
+                     "sumo_host": None, "sumo_port": None, "sumo_gui": True, "client_order": 1,
+                     "carla_host": "127.0.0.1",
+                     "carla_port": 2000,
+                     "tls_manager": "none", "sync_vehicle_color": False, "sync_vehicle_lights": False}
+        step = 0
+        initial_speed = {}
+        HDV_lane_id = {}
+        route_count = {"carla0": 0, "carla1": 0, "carla2": 0}
+        navigation_count={"carla0": 0, "carla1": 0, "carla2": 0}
+        sim = syn.simulation(args_sumo)
+        synchronization = sim["sync"]
+        carla_veh_info_last_step=0
+
         while True:
             clock.tick_busy_loop(60)
             if controller.parse_events(world, clock):
@@ -857,10 +933,27 @@ def game_loop(args):
             world.render(display)
             pygame.display.flip()
 
+            print("steps"+str(step))
+            return_value=syn.synchronization_loop(args_sumo,sim["sumo"], sim["carla"], sim["sync"], initial_speed, HDV_lane_id,
+                                     route_count, step,carla_veh_info_last_step,navigation_count)
+            global CV_message
+            CV_message=return_value["CV_message"]
+            initial_speed=return_value["initial_speed"]
+            HDV_lane_id= return_value["HDV_lane_id"]
+            route_count=return_value["route_count"]
+            step=return_value["step"]
+            carla_veh_info_last_step=return_value["last_step"]
+            navigation_count=return_value["navigation_count"]
+            print(CV_message)
+
     finally:
 
         if world is not None:
             world.destroy()
+
+        logging.info('Cleaning synchronization')
+
+        synchronization.close()
 
         pygame.quit()
 
@@ -925,4 +1018,3 @@ def main():
 if __name__ == '__main__':
 
     main()
-
