@@ -10,6 +10,7 @@ import time
 data = "20"
 time = "30"
 ne = ""
+speed = "0"
 color = "red"
 def server():
     
@@ -21,7 +22,7 @@ def server():
         global data
         global time
         global ne
-        
+        global speed
         data = sk.recv(1024).decode()
         print(data)
         if data == 'None':
@@ -32,42 +33,51 @@ def server():
             time = "0"
         sk.send(b"ack2")
         ne = sk.recv(1024).decode()
-        
-        print(ne)
+        sk.send(b"ack3")
+        speed = sk.recv(1024).decode()
+        print(speed)
     sk.close()
-
+    
+def getspeed():
+    global speed
+    mess = speed + "kph"
+    var3.set(mess)
+    root.after(200,getspeed)
+    
 def getmessage():
     global data
     global color
     number = int(data)
     if (number > 0):
-        mess = "+" + data + "kph"
+        mess = "increase " + data + "kph"
         colorChangetoRed()
     if(number == 0):
         mess = ''
-    else:
-        mess =  data + "kph"
+    if(number < 0):
+        number = number * (-1)
+        snumber = str(number)
+        mess =  "slowdown " + snumber + "kph"
         colorChangetoGreen()
     var.set(mess)
-    root.after(200, getmessage)
+    root.after(1000, getmessage)
     
 def gettime():
     global time
     
     time_ = int(time)
     if (time_ > 0):
-        mess =    time +" late"
+        mess =    time +"s behind"
     if(time_ == 0):
         mess= ''
-    else:
-        mess = time +" early"
+    if(time_ < 0):
+        mess = time +"s upfront"
     var1.set(mess)
     root.after(1000,gettime)
 
 def getnev():
     global ne
     var2.set(ne)
-    root.after(1000,getnev)
+    root.after(200,getnev)
 
 def colorChangetoRed():
     w.config(fg = 'red')
@@ -86,15 +96,19 @@ root.resizable(0,0)
 var=tk.StringVar()
 var1=tk.StringVar()
 var2=tk.StringVar()
+var3=tk.StringVar()
 
 z =tk.Label(root,text="",textvariable = var2,fg="black",font=("微软雅黑",40))
 w =tk.Label(root, text="Hello Python!",textvariable=var1,fg=color,font=("微软雅黑",40))
 v =tk.Label(root, text= "hello",textvariable = var,fg =color,font=("微软雅黑",40))
+s = tk.Label(root,text="",textvariable = var3,fg="black",font=("微软雅黑",40))
 
-
+var3.set(getspeed())
 var.set(getmessage())
 var1.set(gettime())
 var2.set(getnev())
+
+s.pack()
 z.pack()
 w.pack()
 v.pack()
