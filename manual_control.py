@@ -588,13 +588,14 @@ class HUD(object):
         self._show_info = True
         self._info_text = []
         self._server_clock = pygame.time.Clock()
+        
     def print_self_info(self,world):
         t = world.player.get_transform()
         v = world.player.get_velocity()
         vehicles = world.world.get_actors().filter('vehicle.*')
         car_speed = 3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)
         info_dic = defaultdict(list)
-        info_dic["veh_ID"].append(world.player.id)
+        info_dic["veh_ID"].append("carla0")
         info_dic["veh_speed"].append(car_speed)
         info_dic["x"].append(t.location.x)
         info_dic["y"].append(t.location.y)
@@ -607,10 +608,16 @@ class HUD(object):
                 for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
                     if d > 500.0:
                         break
+                    vehicle_type = get_actor_display_name(vehicle, truncate=22)
                     vehicle_velocity = get_actor_velocity(vehicle)
                     v_location = get_actor_location(vehicle)
                     vehicle_speed = 3.6 * math.sqrt(vehicle_velocity.x**2 + vehicle_velocity.y**2 + vehicle_velocity.z**2)
-                    vehicle_id = vehicle.id
+                    if(vehicle_type == "Audi Tt"):
+                        veh_ID = "carala1"
+                    elif(vehicle_type == "Nissan Micra"):
+                        veh_ID = "carla2"
+                    else:   
+                        vehicle_id = vehicle.id
                     info_dic["veh_ID"].append(vehicle_id)
                     info_dic["veh_speed"].append(vehicle_speed)
                     info_dic["x"].append(v_location.location.x)
@@ -658,6 +665,7 @@ class HUD(object):
             'GNSS:% 24s' % ('(% 2.6f, % 3.6f)' % (world.gnss_sensor.lat, world.gnss_sensor.lon)),
             'Height:  % 18.0f m' % t.location.z,
             '']
+        print(get_actor_display_name(world.player, truncate=20))
         if (car_speed > 40):
             self.speedmention.toggle()
             
@@ -690,11 +698,7 @@ class HUD(object):
             for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
                 if d > 500.0:
                     break
-                vehicle_type = get_actor_display_name(vehicle, truncate=22)
-                vehicle_velocity = get_actor_velocity(vehicle)
-                v_location = get_actor_location(vehicle)
-                vehicle_speed = 3.6 * math.sqrt(vehicle_velocity.x**2 + vehicle_velocity.y**2 + vehicle_velocity.z**2)
-                vehicle_id = vehicle.id
+
         
     def toggle_info(self):
         self._show_info = not self._show_info
