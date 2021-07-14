@@ -10,7 +10,6 @@ import time
 data = "20"
 time = "30"
 ne = ""
-speed = "0"
 color = "red"
 def server():
     
@@ -22,7 +21,6 @@ def server():
         global data
         global time
         global ne
-        global speed
         data = sk.recv(1024).decode()
         print(data)
         if data == 'None':
@@ -34,15 +32,8 @@ def server():
         sk.send(b"ack2")
         ne = sk.recv(1024).decode()
         sk.send(b"ack3")
-        speed = sk.recv(1024).decode()
-        print(speed)
     sk.close()
     
-def getspeed():
-    global speed
-    mess = speed + "kph"
-    var3.set(mess)
-    root.after(200,getspeed)
     
 def getmessage():
     global data
@@ -96,19 +87,15 @@ root.resizable(0,0)
 var=tk.StringVar()
 var1=tk.StringVar()
 var2=tk.StringVar()
-var3=tk.StringVar()
 
 z =tk.Label(root,text="",textvariable = var2,fg="black",font=("微软雅黑",40))
 w =tk.Label(root, text="Hello Python!",textvariable=var1,fg=color,font=("微软雅黑",40))
 v =tk.Label(root, text= "hello",textvariable = var,fg =color,font=("微软雅黑",40))
-s = tk.Label(root,text="",textvariable = var3,fg="black",font=("微软雅黑",40))
 
-var3.set(getspeed())
 var.set(getmessage())
 var1.set(gettime())
 var2.set(getnev())
 
-s.pack()
 z.pack()
 w.pack()
 v.pack()
