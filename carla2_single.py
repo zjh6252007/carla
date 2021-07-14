@@ -427,7 +427,10 @@ class HUD(object):
         self._show_info = True
         self._info_text = []
         self._server_clock = pygame.time.Clock()
+        self.speedmention = SpeedMention(pygame.font.Font(mono, 16), width, height)
+        self.showSpeed = showSpeed(pygame.font.Font(mono, 16), width, height)
     def print_self_info(self,world):
+        c = world.player.get_control()
         t = world.player.get_transform()
         v = world.player.get_velocity()
         vehicles = world.world.get_actors().filter('vehicle.*')
@@ -487,6 +490,7 @@ class HUD(object):
         collision = [x / max_col for x in collision]
         car_speed = 3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)
         vehicles = world.world.get_actors().filter('vehicle.*')
+        self.showSpeed.updatespeed(world)
         self._info_text = [
             'Server:  % 16.0f FPS' % self.server_fps,
             'Client:  % 16.0f FPS' % clock.get_fps(),
